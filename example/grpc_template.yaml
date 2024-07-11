@@ -1,0 +1,39 @@
+apiVersion: "tinkerbell.org/v1alpha1"
+kind: Template
+metadata:
+  name: testing
+  namespace: tink
+spec:
+  data: |
+    version: "0.1"
+    name: test
+    global_timeout: 9800
+    tasks:
+      - name: "os-installation"
+        worker: "{{.device_1}}"
+        actions:
+          - name: "stream ubuntu image"
+            image: bash
+            timeout: 9600
+            command: ["sleep", "4"]
+          - name: "add-cloud-init-config"
+            image: bash
+            timeout: 90
+            command: ["sleep", "4"]
+          - name: "add-tink-cloud-init-ds-config"
+            image: bash
+            timeout: 90
+            command: ["sleep", "4"]
+          - name: "write-netplan"
+            image: bash
+            command: ["sleep", "4"]
+            timeout: 90
+          - name: "create-debugging-user"
+            image: bash
+            timeout: 90
+            command: ["sleep", "4"]
+          - name: "kexec-into-installed-os"
+            image: bash
+            timeout: 90
+            pid: host
+            command: ["sleep", "4"]
