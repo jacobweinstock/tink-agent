@@ -112,7 +112,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 
 	create, err := c.Client.ContainerCreate(ctx, &cfg, &hostCfg, nil, nil, containerName)
 	if err != nil {
-		return fmt.Errorf("docker: %w", err)
+		return fmt.Errorf("error creating container: %w", err)
 	}
 
 	// Always try to remove the container on exit.
@@ -134,7 +134,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 	waitBody, waitErr := c.Client.ContainerWait(ctx, create.ID, container.WaitConditionNextExit)
 
 	if err := c.Client.ContainerStart(ctx, create.ID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("docker: %w", err)
+		return fmt.Errorf("error starting container: %w", err)
 	}
 
 	select {
@@ -145,7 +145,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		return fmt.Errorf("got non 0 exit status, see the logs for more information")
 
 	case err := <-waitErr:
-		return fmt.Errorf("docker: %w", err)
+		return fmt.Errorf("error while waiting for container: %w", err)
 
 	case <-ctx.Done():
 		// We can't use the context passed to Run() as its been cancelled.
@@ -155,7 +155,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		if err != nil {
 			c.Log.Info("Failed to gracefully stop container", "error", err)
 		}
-		return fmt.Errorf("docker: %w", ctx.Err())
+		return fmt.Errorf("context error: %w", ctx.Err())
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 
 	"crypto/tls"
 
-	"github.com/jacobweinstock/rerun/proto"
 	"github.com/jacobweinstock/rerun/spec"
+	"github.com/jacobweinstock/rerun/transport/grpc/proto"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -65,16 +65,17 @@ func (c *Config) Start(ctx context.Context) error {
 		}
 
 		action := spec.Action{
-			TaskName:   request.GetCurrentTask(),
-			ID:         request.GetWorkflowId(),
-			Name:       curAction.Name,
-			Image:      curAction.Image,
-			Cmd:        curAction.Command[0],
-			Args:       curAction.Command[1:],
-			Env:        []spec.Env{},
-			Volumes:    []spec.Volume{},
-			Namespaces: spec.Namespaces{},
-			Retries:    0,
+			TaskName:       request.GetCurrentTask(),
+			ID:             request.GetWorkflowId(),
+			Name:           curAction.Name,
+			Image:          curAction.Image,
+			Cmd:            curAction.Command[0],
+			Args:           curAction.Command[1:],
+			Env:            []spec.Env{},
+			Volumes:        []spec.Volume{},
+			Namespaces:     spec.Namespaces{},
+			Retries:        0,
+			TimeoutSeconds: int(curAction.Timeout),
 		}
 		for _, v := range curAction.Volumes {
 			action.Volumes = append(action.Volumes, spec.Volume(v))
@@ -108,7 +109,7 @@ func (c *Config) Write(ctx context.Context, event spec.Event) error {
 		WorkflowId:   event.Action.ID,
 		TaskName:     event.Action.TaskName,
 		ActionName:   event.Action.Name,
-		ActionStatus: event.State,
+		ActionStatus: specToProto(event.State),
 		Seconds:      0,
 		Message:      event.Message,
 		WorkerId:     c.WorkerID,
@@ -135,4 +136,19 @@ func NewClientConn(authority string, tlsEnabled bool, tlsInsecure bool) (*grpc.C
 	}
 
 	return conn, nil
+}
+
+func specToProto(inState spec.State) proto.State {
+	switch inState {
+	case spec.StateRunning:
+		return proto.State_STATE_RUNNING
+	case spec.StateSuccess:
+		return proto.State_STATE_SUCCESS
+	case spec.StateFailure:
+		return proto.State_STATE_FAILED
+	case spec.StateTimeout:
+		return proto.State_STATE_TIMEOUT
+	}
+
+	return proto.State(-1)
 }

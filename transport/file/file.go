@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/jacobweinstock/rerun/proto"
 	"github.com/jacobweinstock/rerun/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -44,7 +43,7 @@ func (c *Config) Read(ctx context.Context) (spec.Action, error) {
 }
 
 func (c *Config) Write(ctx context.Context, event spec.Event) error {
-	if event.State == proto.State_STATE_FAILED {
+	if event.State == spec.StateFailure || event.State == spec.StateTimeout {
 		c.Actions = make(chan spec.Action)
 	}
 	return nil

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -11,11 +10,11 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/jacobweinstock/rerun/agent"
-	"github.com/jacobweinstock/rerun/proto"
 	"github.com/jacobweinstock/rerun/runtime/docker"
 	"github.com/jacobweinstock/rerun/spec"
 	"github.com/jacobweinstock/rerun/transport/file"
 	"github.com/jacobweinstock/rerun/transport/grpc"
+	"github.com/jacobweinstock/rerun/transport/grpc/proto"
 )
 
 const (
@@ -81,7 +80,7 @@ func main() {
 
 	dclient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		fmt.Println("unable to create Docker client", "error", err)
+		log.Info("unable to create Docker client", "error", err)
 		os.Exit(dockerClientErrorCode)
 	}
 	dockerExecutor := &docker.Config{

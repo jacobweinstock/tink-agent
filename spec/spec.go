@@ -1,7 +1,5 @@
 package spec
 
-import "github.com/jacobweinstock/rerun/proto"
-
 // Action defines an individual action to be run on a target machine.
 type Action struct {
 	TaskName string
@@ -33,8 +31,9 @@ type Action struct {
 
 	// Namespaces defines the Linux namespaces this container should execute in.
 	// +optional
-	Namespaces Namespaces `json:"namespaces,omitempty" yaml:"namespaces,omitempty"`
-	Retries    int        `json:"retries" yaml:"retries"`
+	Namespaces     Namespaces `json:"namespaces,omitempty" yaml:"namespaces,omitempty"`
+	Retries        int        `json:"retries" yaml:"retries"`
+	TimeoutSeconds int        `json:"timeoutSeconds" yaml:"timeoutSeconds"`
 }
 
 type Env struct {
@@ -72,5 +71,14 @@ type Namespaces struct {
 type Event struct {
 	Action  Action
 	Message string
-	State   proto.State
+	State   State
 }
+
+type State string
+
+const (
+	StateSuccess State = "success"
+	StateFailure State = "failure"
+	StateRunning State = "running"
+	StateTimeout State = "timeout"
+)

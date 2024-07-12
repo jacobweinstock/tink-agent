@@ -2,10 +2,10 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
-	"github.com/jacobweinstock/rerun/proto"
 	"github.com/jacobweinstock/rerun/spec"
 )
 
@@ -46,7 +46,6 @@ func (c *Config) Run(ctx context.Context, log *slog.Logger) {
 		case <-ctx.Done():
 			return
 		default:
-			time.Sleep(time.Second * 2)
 		}
 
 		action, err := c.TransportReader.Read(ctx)
@@ -54,29 +53,36 @@ func (c *Config) Run(ctx context.Context, log *slog.Logger) {
 			log.Info("error reading/retrieving action", "error", err)
 			continue
 		}
+
 		log.Info("received action", "action", action)
-		if err := c.TransportWriter.Write(ctx, spec.Event{Action: action, Message: "running action", State: proto.State_STATE_RUNNING}); err != nil {
+		if err := c.TransportWriter.Write(ctx, spec.Event{Action: action, Message: "running action", State: spec.StateRunning}); err != nil {
 			log.Info("error writing event", "error", err)
 			continue
 		}
-		log.Info("reported action status", "action", action, "state", proto.State_STATE_RUNNING.String())
+		log.Info("reported action status", "action", action, "state", spec.StateRunning)
 
-		state := proto.State_STATE_SUCCESS
+		state := spec.StateSuccess
 		retries := action.Retries
 		if retries == 0 {
 			retries = 1
 		}
+		dur := time.Duration(action.TimeoutSeconds) * time.Second
 
+		timeoutCtx, _ := context.WithTimeout(ctx, dur)
 		for i := 1; i <= retries; i++ {
-			if err := c.RuntimeExecutor.Execute(ctx, action); err != nil {
+			if err := c.RuntimeExecutor.Execute(timeoutCtx, action); err != nil {
 				log.Info("error executing action", "error", err, "maxRetries", retries, "currentRetry", i)
-				state = proto.State_STATE_FAILED
+				state = spec.StateFailure
+				if errors.Is(err, context.DeadlineExceeded) {
+					state = spec.StateTimeout
+					break
+				}
 				if i == retries {
 					break
 				}
 				continue
 			}
-			state = proto.State_STATE_SUCCESS
+			state = spec.StateSuccess
 			log.Info("executed action", "action", action)
 			break
 		}
@@ -85,7 +91,7 @@ func (c *Config) Run(ctx context.Context, log *slog.Logger) {
 			log.Info("error writing event", "error", err)
 			continue
 		}
-		log.Info("reported action status", "action", action, "state", state.String())
+		log.Info("reported action status", "action", action, "state", state)
 
 	}
 }
