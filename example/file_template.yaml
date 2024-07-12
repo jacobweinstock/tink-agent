@@ -4,6 +4,7 @@
   image: bash
   cmd: "sleep"
   args: ["4"]
+  retries: 4
   env:
     - key: "key1"
       value: "value1"
@@ -17,6 +18,7 @@
   image: bash
   cmd: "sleep"
   args: ["4"]
+  retries: 4
   env:
     - key: "key1"
       value: "value1"
@@ -28,8 +30,9 @@
 - id: 123457
   name: action 3
   image: bash
-  cmd: "sleep"
+  cmd: "sleeps"
   args: ["4"]
+  retries: 4
   env:
     - key: "key1"
       value: "value1"
@@ -43,6 +46,7 @@
   image: bash
   cmd: "sleep"
   args: ["4"]
+  retries: 4
   env:
     - key: "key1"
       value: "value1"

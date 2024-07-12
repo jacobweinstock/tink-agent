@@ -34,7 +34,7 @@ type Action struct {
 	// Namespaces defines the Linux namespaces this container should execute in.
 	// +optional
 	Namespaces Namespaces `json:"namespaces,omitempty" yaml:"namespaces,omitempty"`
-	Retries    int
+	Retries    int        `json:"retries" yaml:"retries"`
 }
 
 type Env struct {

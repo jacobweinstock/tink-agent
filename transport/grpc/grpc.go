@@ -28,70 +28,69 @@ type Config struct {
 
 func (c *Config) Start(ctx context.Context) error {
 	c.Log.Info("grpc transport starting")
-LOOP1:
+	var inProcessAction *proto.WorkflowAction
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		default:
 		}
-
 		stream, err := c.TinkServerClient.GetWorkflowContexts(ctx, &proto.WorkflowContextRequest{WorkerId: c.WorkerID})
 		if err != nil {
 			<-time.After(c.RetryInterval)
 			continue
 		}
-		for {
-			request, err := stream.Recv()
-			switch {
-			case err != nil:
-				<-time.After(c.RetryInterval)
-				goto LOOP1
-			}
-			if request == nil || request.GetCurrentWorker() != c.WorkerID {
-				goto LOOP1
-			}
-			switch request.GetCurrentActionState() {
-			// only get actions whose state is STATE_PENDING
-			case proto.State_STATE_SUCCESS, proto.State_STATE_RUNNING, proto.State_STATE_FAILED, proto.State_STATE_TIMEOUT:
-				continue
-			}
 
-			actions, err := c.TinkServerClient.GetWorkflowActions(ctx, &proto.WorkflowActionsRequest{WorkflowId: request.GetWorkflowId()})
-			if err != nil {
-				continue
-			}
-			for _, act := range actions.GetActionList() {
-				if request.GetCurrentActionState() == proto.State_STATE_PENDING {
-					action := spec.Action{
-						TaskName:   request.GetCurrentTask(),
-						ID:         request.GetWorkflowId(),
-						Name:       act.Name,
-						Image:      act.Image,
-						Cmd:        act.Command[0],
-						Args:       act.Command[1:],
-						Env:        []spec.Env{},
-						Volumes:    []spec.Volume{},
-						Namespaces: spec.Namespaces{},
-						Retries:    0,
-					}
-					for _, v := range act.Volumes {
-						action.Volumes = append(action.Volumes, spec.Volume(v))
-					}
-					for _, v := range act.GetEnvironment() {
-						kv := strings.Split(v, "=")
-						env := spec.Env{
-							Key:   kv[0],
-							Value: kv[1],
-						}
-						action.Env = append(action.Env, env)
-					}
-					action.Namespaces.PID = act.GetPid()
-
-					c.Actions <- action
-				}
-			}
+		request, err := stream.Recv()
+		switch {
+		case err != nil:
+			<-time.After(c.RetryInterval)
+			continue
 		}
+		if request == nil || request.GetCurrentWorker() != c.WorkerID || request.GetCurrentActionState() != proto.State_STATE_PENDING {
+			<-time.After(c.RetryInterval)
+			continue
+		}
+
+		actions, err := c.TinkServerClient.GetWorkflowActions(ctx, &proto.WorkflowActionsRequest{WorkflowId: request.GetWorkflowId()})
+		if err != nil {
+			<-time.After(c.RetryInterval)
+			continue
+		}
+
+		curAction := actions.GetActionList()[request.GetCurrentActionIndex()]
+		if curAction.String() == inProcessAction.String() {
+			<-time.After(c.RetryInterval)
+			continue
+		}
+
+		action := spec.Action{
+			TaskName:   request.GetCurrentTask(),
+			ID:         request.GetWorkflowId(),
+			Name:       curAction.Name,
+			Image:      curAction.Image,
+			Cmd:        curAction.Command[0],
+			Args:       curAction.Command[1:],
+			Env:        []spec.Env{},
+			Volumes:    []spec.Volume{},
+			Namespaces: spec.Namespaces{},
+			Retries:    0,
+		}
+		for _, v := range curAction.Volumes {
+			action.Volumes = append(action.Volumes, spec.Volume(v))
+		}
+		for _, v := range curAction.GetEnvironment() {
+			kv := strings.Split(v, "=")
+			env := spec.Env{
+				Key:   kv[0],
+				Value: kv[1],
+			}
+			action.Env = append(action.Env, env)
+		}
+		action.Namespaces.PID = curAction.GetPid()
+
+		c.Actions <- action
+		inProcessAction = curAction
 	}
 }
 
@@ -118,10 +117,7 @@ func (c *Config) Write(ctx context.Context, event spec.Event) error {
 	if err != nil {
 		return fmt.Errorf("error reporting action: %v: %w", ar, err)
 	}
-	// I don't like this but it seems to be necessary in order to avoid "reported action name does not match the current action details" errors.
-	// The errors don't seem to affect the outcome of the action, but I'm not entirely certain of that.
-	// This sleep give Tink server/Kubernetes time to update the status of the action.
-	time.Sleep(time.Second * 2)
+
 	return nil
 }
 
@@ -133,7 +129,7 @@ func NewClientConn(authority string, tlsEnabled bool, tlsInsecure bool) (*grpc.C
 		creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 	}
 
-	conn, err := grpc.Dial(authority, creds, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+	conn, err := grpc.NewClient(authority, creds, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
 	if err != nil {
 		return nil, fmt.Errorf("dial tinkerbell server: %w", err)
 	}

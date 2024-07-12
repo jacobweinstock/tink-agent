@@ -12,27 +12,27 @@ spec:
       - name: "os-installation"
         worker: "{{.device_1}}"
         actions:
-          - name: "stream ubuntu image"
+          - name: "action 1"
             image: bash
             timeout: 9600
             command: ["sleep", "4"]
-          - name: "add-cloud-init-config"
+          - name: "action 2"
             image: bash
             timeout: 90
             command: ["sleep", "4"]
-          - name: "add-tink-cloud-init-ds-config"
+          - name: "action 3"
             image: bash
             timeout: 90
             command: ["sleep", "4"]
-          - name: "write-netplan"
+          - name: "action 4"
             image: bash
             command: ["sleep", "4"]
             timeout: 90
-          - name: "create-debugging-user"
+          - name: "action 5"
             image: bash
             timeout: 90
             command: ["sleep", "4"]
-          - name: "kexec-into-installed-os"
+          - name: "action 6"
             image: bash
             timeout: 90
             pid: host
