@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/jacobweinstock/rerun/agent"
+	"github.com/jacobweinstock/rerun/runtime/containerd"
 	"github.com/jacobweinstock/rerun/runtime/docker"
 	"github.com/jacobweinstock/rerun/spec"
 	"github.com/jacobweinstock/rerun/transport/file"
@@ -43,7 +44,7 @@ func main() {
 	defer done()
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false}))
 
-	transport := "nats"
+	transport := "file"
 	var tr agent.TransportReader
 	var tw agent.TransportWriter
 	switch transport {
@@ -93,19 +94,32 @@ func main() {
 		tw = readWriter
 	}
 
-	dclient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		log.Info("unable to create Docker client", "error", err)
-		os.Exit(dockerClientErrorCode)
-	}
-	dockerExecutor := &docker.Config{
-		Client: dclient,
-		Log:    log,
+	runtime := "containerd"
+	var re agent.RuntimeExecutor
+	switch runtime {
+	case "docker":
+		dclient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			log.Info("unable to create Docker client", "error", err)
+			os.Exit(dockerClientErrorCode)
+		}
+		dockerExecutor := &docker.Config{
+			Client: dclient,
+			Log:    log,
+		}
+		re = dockerExecutor
+	case "containerd":
+		c, err := containerd.NewConfig(nil, log)
+		if err != nil {
+			log.Info("unable to create containerd config", "error", err)
+			os.Exit(1)
+		}
+		re = c
 	}
 
 	a := &agent.Config{
 		TransportReader: tr,
-		RuntimeExecutor: dockerExecutor,
+		RuntimeExecutor: re,
 		TransportWriter: tw,
 	}
 

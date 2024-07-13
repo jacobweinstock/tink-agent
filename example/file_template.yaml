@@ -5,6 +5,7 @@
   cmd: "sleep"
   args: ["2"]
   retries: 4
+  timeoutSeconds: 90
   env:
     - key: "key1"
       value: "value1"
@@ -19,6 +20,7 @@
   cmd: "sleep"
   args: ["2"]
   retries: 4
+  timeoutSeconds: 90
   env:
     - key: "key1"
       value: "value1"
@@ -30,9 +32,10 @@
 - id: 123457
   name: action 3
   image: bash
-  cmd: "sleeps"
+  cmd: "sleep"
   args: ["2"]
   retries: 4
+  timeoutSeconds: 90
   env:
     - key: "key1"
       value: "value1"
@@ -47,6 +50,7 @@
   cmd: "sleep"
   args: ["2"]
   retries: 4
+  timeoutSeconds: 90
   env:
     - key: "key1"
       value: "value1"
