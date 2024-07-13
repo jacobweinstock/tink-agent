@@ -8,13 +8,9 @@ import (
 	"github.com/jacobweinstock/rerun/spec"
 )
 
-// TODO: add a container naming function that standardizes container naming across runtimes.
-// TODO: add a function for converting action envs to a slice of strings with k=v format.
-
-var validContainerName = regexp.MustCompile(`[^a-zA-Z0-9_.-]`)
-
 // ParseName converts an action ID into a usable container name.
 func ParseName(actionID, name string) string {
+	var validContainerName = regexp.MustCompile(`[^a-zA-Z0-9_.-]`)
 	// Prepend 'tinkerbell_' so we guarantee the additional constraints on the first character.
 	return fmt.Sprintf(
 		"tinkerbell_%s_%s_%s",

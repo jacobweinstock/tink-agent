@@ -44,7 +44,7 @@ func main() {
 	defer done()
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false}))
 
-	transport := "file"
+	transport := "grpc"
 	var tr agent.TransportReader
 	var tw agent.TransportWriter
 	switch transport {
@@ -94,7 +94,7 @@ func main() {
 		tw = readWriter
 	}
 
-	runtime := "containerd"
+	runtime := "docker"
 	var re agent.RuntimeExecutor
 	switch runtime {
 	case "docker":
