@@ -13,11 +13,13 @@ type Config struct {
 	Log     *slog.Logger
 	Actions chan spec.Action
 	FileLoc string
+	cancel  chan bool
 }
 
 // func(yield func(spec.Action) bool)
 func (c *Config) Start(ctx context.Context) error {
 	c.Log.Info("file transport starting")
+	c.cancel = make(chan bool)
 	contents, err := os.ReadFile(c.FileLoc)
 	if err != nil {
 		return err
@@ -27,7 +29,13 @@ func (c *Config) Start(ctx context.Context) error {
 		return err
 	}
 	for _, action := range actions {
-		c.Actions <- action
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-c.cancel:
+			return nil
+		case c.Actions <- action:
+		}
 	}
 
 	return nil

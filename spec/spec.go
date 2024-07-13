@@ -1,5 +1,7 @@
 package spec
 
+import "fmt"
+
 // Action defines an individual action to be run on a target machine.
 type Action struct {
 	TaskName string
@@ -82,3 +84,7 @@ const (
 	StateRunning State = "running"
 	StateTimeout State = "timeout"
 )
+
+func (e Event) String() string {
+	return fmt.Sprintf("action: %v, message: %v, state: %v", e.Action, e.Message, e.State)
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/netip"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,6 +16,7 @@ import (
 	"github.com/jacobweinstock/rerun/transport/file"
 	"github.com/jacobweinstock/rerun/transport/grpc"
 	"github.com/jacobweinstock/rerun/transport/grpc/proto"
+	"github.com/jacobweinstock/rerun/transport/nats"
 )
 
 const (
@@ -41,7 +43,7 @@ func main() {
 	defer done()
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false}))
 
-	transport := "grpc"
+	transport := "nats"
 	var tr agent.TransportReader
 	var tw agent.TransportWriter
 	switch transport {
@@ -72,6 +74,19 @@ func main() {
 			WorkerID:         "52:54:00:0f:2e:67",
 			RetryInterval:    time.Second * 5,
 			Actions:          make(chan spec.Action),
+		}
+		go readWriter.Start(ctx)
+		tr = readWriter
+		tw = readWriter
+	case "nats":
+		readWriter := &nats.Config{
+			StreamName:     "tinkerbell",
+			EventsSubject:  "workflow_status",
+			ActionsSubject: "workflow_actions",
+			IPPort:         netip.MustParseAddrPort("127.0.0.1:4222"),
+			Log:            log,
+			AgentID:        "52:54:00:0f:2e:67",
+			Actions:        make(chan spec.Action),
 		}
 		go readWriter.Start(ctx)
 		tr = readWriter
