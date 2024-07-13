@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"regexp"
 	"strings"
 
 	retry "github.com/avast/retry-go"
@@ -16,7 +15,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
-	"github.com/jacobweinstock/rerun/pkg/rand"
+	"github.com/jacobweinstock/rerun/pkg/conv"
 	"github.com/jacobweinstock/rerun/spec"
 )
 
@@ -76,7 +75,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 	// TODO: Support all the other things on the action such as volumes.
 	cfg := container.Config{
 		Image: a.Image,
-		Env:   toDockerEnv(a.Env),
+		Env:   conv.ParseEnv(a.Env),
 	}
 
 	hostCfg := container.HostConfig{
@@ -96,7 +95,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		})
 	}
 
-	containerName := toContainerName(a.ID, a.Name)
+	containerName := conv.ParseName(a.ID, a.Name)
 
 	// Docker uses the entrypoint as the default command. The Tink Action Cmd property is modeled
 	// as being the command launched in the container hence it is used as the entrypoint. Args
@@ -157,27 +156,6 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		}
 		return fmt.Errorf("context error: %w", ctx.Err())
 	}
-}
-
-var validContainerName = regexp.MustCompile(`[^a-zA-Z0-9_.-]`)
-
-// toContainerName converts an action ID into a usable container name.
-func toContainerName(actionID, name string) string {
-	// Prepend 'tinkerbell_' so we guarantee the additional constraints on the first character.
-	return fmt.Sprintf(
-		"tinkerbell_%s_%s_%s",
-		validContainerName.ReplaceAllString(name, "_"),
-		validContainerName.ReplaceAllString(actionID, "_"),
-		rand.String(6),
-	)
-}
-
-func toDockerEnv(envs []spec.Env) []string {
-	var de []string
-	for _, env := range envs {
-		de = append(de, fmt.Sprintf("%v=%v", env.Key, env.Value))
-	}
-	return de
 }
 
 func parseCmdline(cmdlinePath string) (map[string]string, error) {

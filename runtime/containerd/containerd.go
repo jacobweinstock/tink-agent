@@ -12,7 +12,7 @@ import (
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/containers/image/v5/pkg/shortnames"
 	"github.com/containers/image/v5/types"
-	"github.com/jacobweinstock/rerun/pkg/container"
+	"github.com/jacobweinstock/rerun/pkg/conv"
 	"github.com/jacobweinstock/rerun/spec"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -86,13 +86,13 @@ func (c *Config) createContainer(ctx context.Context, image containerd.Image, ac
 	specOpts := []oci.SpecOpts{
 		oci.WithImageConfig(image),
 		oci.WithPrivileged,
-		oci.WithEnv(container.Env(action.Env)),
+		oci.WithEnv(conv.ParseEnv(action.Env)),
 		oci.WithProcessArgs(args...),
 	}
 	if action.Namespaces.PID == "host" {
 		specOpts = append(specOpts, oci.WithHostNamespace(specs.PIDNamespace))
 	}
-	name := container.Name(action.ID, action.Name)
+	name := conv.ParseName(action.ID, action.Name)
 	newOpts = append(newOpts, containerd.WithNewSnapshot(name, image))
 	newOpts = append(newOpts, containerd.WithNewSpec(specOpts...))
 

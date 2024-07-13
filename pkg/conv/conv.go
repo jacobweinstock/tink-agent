@@ -1,4 +1,4 @@
-package container
+package conv
 
 import (
 	"fmt"
@@ -13,8 +13,8 @@ import (
 
 var validContainerName = regexp.MustCompile(`[^a-zA-Z0-9_.-]`)
 
-// toContainerName converts an action ID into a usable container name.
-func Name(actionID, name string) string {
+// ParseName converts an action ID into a usable container name.
+func ParseName(actionID, name string) string {
 	// Prepend 'tinkerbell_' so we guarantee the additional constraints on the first character.
 	return fmt.Sprintf(
 		"tinkerbell_%s_%s_%s",
@@ -24,7 +24,8 @@ func Name(actionID, name string) string {
 	)
 }
 
-func Env(envs []spec.Env) []string {
+// ParseEnv converts an action's envs to a slice of strings with k=v format.
+func ParseEnv(envs []spec.Env) []string {
 	var de []string
 	for _, env := range envs {
 		de = append(de, fmt.Sprintf("%v=%v", env.Key, env.Value))
