@@ -43,7 +43,9 @@ func (c *Config) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer sub.Unsubscribe()
+	defer func() {
+		_ = sub.Unsubscribe()
+	}()
 
 	c.Log.Info("nats transport starting")
 	for {

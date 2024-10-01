@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/netip"
 	"os"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/jacobweinstock/rerun/agent"
+	"github.com/jacobweinstock/rerun/cmd"
 	"github.com/jacobweinstock/rerun/runtime/containerd"
 	"github.com/jacobweinstock/rerun/runtime/docker"
 	"github.com/jacobweinstock/rerun/spec"
@@ -18,19 +21,14 @@ import (
 	"github.com/jacobweinstock/rerun/transport/grpc"
 	"github.com/jacobweinstock/rerun/transport/grpc/proto"
 	"github.com/jacobweinstock/rerun/transport/nats"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
-	// imageEnv is the name of the image that should be run for the second fork. This is set by the user.
-	imageEnv = "IMAGE"
-	// hostnameEnv is the name of the container that is running this process. Docker will set this.
-	hostnameEnv = "HOSTNAME"
-	// retryCountEnv is the amount of time to wait before running the user image. This is set by the user. Default is 10 seconds.
-	retryCountEnv = "RETRY_COUNT"
-	// retryMaxElapsedTimeSecondsEnv is the duration that onced reached will stop the retrying of the Action.
-	retryMaxElapsedTimeSecondsEnv = "RETRY_DURATION_SECONDS"
 	// dockerClientErrorCode is the exit code that should be used when the Docker client was not created successfully.
 	dockerClientErrorCode = 12
+	// name is the name of the agent.
+	name = "tink-agent"
 )
 
 func main() {
@@ -42,13 +40,25 @@ func main() {
 
 	ctx, done := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	defer done()
+
+	c := &cmd.Config{}
+	ce := c.RootCommand(ctx, flag.NewFlagSet(name, flag.ExitOnError))
+
+	// Currently, the Run method only populates config fields. It does not execute anything.
+	if err := ce.ParseAndRun(ctx, os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		ce.FlagSet.Usage()
+		os.Exit(1)
+	}
+
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false}))
 
-	transport := "grpc"
+	eg, ectx := errgroup.WithContext(ctx)
+	ctx = ectx
 	var tr agent.TransportReader
 	var tw agent.TransportWriter
-	switch transport {
-	case "file":
+	switch c.TransportSelected {
+	case cmd.FileTransportType:
 		readWriter := &file.Config{
 			Log:     log,
 			Actions: make(chan spec.Action),
@@ -63,8 +73,8 @@ func main() {
 		}()
 		tr = readWriter
 		tw = readWriter
-	case "grpc":
-		conn, err := grpc.NewClientConn("192.168.2.113:42113", false, false)
+	case cmd.GRPCTransportType:
+		conn, err := grpc.NewClientConn(c.Transport.GRPC.ServerAddrPort, c.Transport.GRPC.TLSEnabled, c.Transport.GRPC.TLSInsecure)
 		if err != nil {
 			log.Info("unable to create gRPC client", "error", err)
 			os.Exit(1)
@@ -72,49 +82,73 @@ func main() {
 		readWriter := &grpc.Config{
 			Log:              log,
 			TinkServerClient: proto.NewWorkflowServiceClient(conn),
-			WorkerID:         "52:54:00:0f:2e:67",
+			WorkerID:         c.ID,
 			RetryInterval:    time.Second * 5,
 			Actions:          make(chan spec.Action),
 		}
-		go readWriter.Start(ctx)
+		eg.Go(func() error {
+			readWriter.Start(ctx)
+			return nil
+		})
 		tr = readWriter
 		tw = readWriter
-	case "nats":
+	case cmd.NATSTransportType:
 		readWriter := &nats.Config{
-			StreamName:     "tinkerbell",
-			EventsSubject:  "workflow_status",
-			ActionsSubject: "workflow_actions",
-			IPPort:         netip.MustParseAddrPort("127.0.0.1:4222"),
+			StreamName:     c.Transport.NATS.StreamName,
+			EventsSubject:  c.Transport.NATS.EventsSubject,
+			ActionsSubject: c.Transport.NATS.ActionsSubject,
+			IPPort:         netip.MustParseAddrPort(c.Transport.NATS.ServerAddrPort),
 			Log:            log,
-			AgentID:        "52:54:00:0f:2e:67",
+			AgentID:        c.ID,
 			Actions:        make(chan spec.Action),
 		}
-		go readWriter.Start(ctx)
+		eg.Go(func() error {
+			return readWriter.Start(ctx)
+		})
 		tr = readWriter
 		tw = readWriter
 	}
 
-	runtime := "docker"
 	var re agent.RuntimeExecutor
-	switch runtime {
-	case "docker":
-		dclient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	switch c.RuntimeSelected {
+	case cmd.DockerRuntimeType:
+		opts := []client.Opt{
+			client.FromEnv,
+			client.WithAPIVersionNegotiation(),
+		}
+		if c.Runtime.Docker.SocketPath != "" {
+			opts = append(opts, client.WithHost(fmt.Sprintf("unix://%s", c.Runtime.Docker.SocketPath)))
+		}
+		dclient, err := client.NewClientWithOpts(opts...)
 		if err != nil {
 			log.Info("unable to create Docker client", "error", err)
 			os.Exit(dockerClientErrorCode)
 		}
+		// TODO(jacobweinstock): handle auth
 		dockerExecutor := &docker.Config{
 			Client: dclient,
 			Log:    log,
 		}
 		re = dockerExecutor
-	case "containerd":
-		c, err := containerd.NewConfig(nil, log)
+		log.Info("using Docker runtime")
+	case cmd.ContainerdRuntimeType:
+		opts := []containerd.Opt{}
+		if c.Runtime.Containerd.Namespace != "" {
+			opts = append(opts, containerd.WithNamespace(c.Runtime.Containerd.Namespace))
+		}
+		if c.Runtime.Containerd.SocketPath != "" {
+			opts = append(opts, containerd.WithSocketPath(c.Runtime.Containerd.SocketPath))
+		}
+		cd, err := containerd.NewConfig(log, opts...)
 		if err != nil {
 			log.Info("unable to create containerd config", "error", err)
 			os.Exit(1)
 		}
-		re = c
+		re = cd
+		log.Info("using containerd runtime")
+	default:
+		log.Info("no runtime selected, defaulting to Docker")
+		c.RuntimeSelected = cmd.DockerRuntimeType
 	}
 
 	a := &agent.Config{
@@ -123,6 +157,11 @@ func main() {
 		TransportWriter: tw,
 	}
 
-	a.Run(ctx, log)
+	eg.Go(func() error {
+		a.Run(ctx, log)
+		return nil
+	})
+
+	_ = eg.Wait()
 
 }

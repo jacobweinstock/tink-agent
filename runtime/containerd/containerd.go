@@ -18,13 +18,14 @@ import (
 )
 
 type Config struct {
-	Namespace string
-	Client    *containerd.Client
-	Log       *slog.Logger
+	Namespace  string
+	Client     *containerd.Client
+	Log        *slog.Logger
+	SocketPath string
 }
 
 func (c *Config) Execute(ctx context.Context, a spec.Action) error {
-	ctx = namespaces.WithNamespace(ctx, "tinkerbell")
+	ctx = namespaces.WithNamespace(ctx, c.Namespace)
 	// Pull the image
 	imageName := a.Image
 	r, err := shortnames.Resolve(&types.SystemContext{PodmanOnlyShortNamesIgnoreRegistriesConfAndForceDockerHub: true}, imageName)
@@ -35,7 +36,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		imageName = r.PullCandidates[0].Value.String()
 	}
 	// set up a containerd namespace
-	ctx = namespaces.WithNamespace(ctx, "tinkerbell")
+	ctx = namespaces.WithNamespace(ctx, c.Namespace)
 	image, err := c.Client.GetImage(ctx, imageName)
 	if err != nil {
 		// if the image isn't already in our namespaced context, then pull it
@@ -43,22 +44,22 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		if err != nil {
 			return fmt.Errorf("error pulling image: %w", err)
 		}
+		c.Log.Info("image pulled", "image", image.Name())
 	}
-	c.Log.Info("image pulled", "image", image)
 
 	// create a container
 	tainer, err := c.createContainer(ctx, image, a)
 	if err != nil {
 		return fmt.Errorf("error creating container: %w", err)
 	}
-	defer tainer.Delete(ctx, containerd.WithSnapshotCleanup)
+	defer func() { _ = tainer.Delete(ctx, containerd.WithSnapshotCleanup) }()
 
 	// create the task
 	task, err := tainer.NewTask(ctx, cio.NewCreator(cio.WithStdio))
 	if err != nil {
 		return fmt.Errorf("error creating task: %w", err)
 	}
-	defer task.Delete(ctx)
+	defer func() { _, _ = task.Delete(ctx) }()
 
 	var statusC <-chan containerd.ExitStatus
 	statusC, err = task.Wait(ctx)
@@ -68,7 +69,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 
 	// start the task
 	if err := task.Start(ctx); err != nil {
-		task.Delete(ctx)
+		_, _ = task.Delete(ctx)
 		return fmt.Errorf("error starting task: %w", err)
 	}
 
@@ -99,14 +100,47 @@ func (c *Config) createContainer(ctx context.Context, image containerd.Image, ac
 	return c.Client.NewContainer(ctx, name, newOpts...)
 }
 
-func NewConfig(client *containerd.Client, log *slog.Logger) (*Config, error) {
+type Opt func(*Config)
+
+func WithNamespace(namespace string) Opt {
+	return func(c *Config) {
+		c.Namespace = namespace
+	}
+}
+
+func WithClient(client *containerd.Client) Opt {
+	return func(c *Config) {
+		c.Client = client
+	}
+}
+
+func WithSocketPath(socketPath string) Opt {
+	return func(c *Config) {
+		c.SocketPath = socketPath
+	}
+}
+
+func NewConfig(log *slog.Logger, opts ...Opt) (*Config, error) {
 	c := &Config{Log: log}
-	if client == nil {
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	if c.Namespace != "" {
+		client, err := containerd.New(c.SocketPath)
+		if err != nil {
+			return nil, fmt.Errorf("error creating containerd client: %w", err)
+		}
+		c.Client = client
+	}
+
+	if c.Client == nil {
 		client, err := containerd.New("/run/containerd/containerd.sock")
 		if err != nil {
 			return nil, fmt.Errorf("error creating containerd client: %w", err)
 		}
 		c.Client = client
 	}
+
 	return c, nil
 }

@@ -2,64 +2,56 @@ package docker
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"strings"
+	"time"
 
 	retry "github.com/avast/retry-go"
 	"github.com/aws/smithy-go/ptr"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
 	"github.com/jacobweinstock/rerun/pkg/conv"
 	"github.com/jacobweinstock/rerun/spec"
 )
 
-const (
-	// registryUsernameCmdlineKey is the key for the username for the registry that is found in /proc/cmdline.
-	registryUsernameCmdlineKey = "registry_username"
-	// registryPasswordCmdlineKey is the key for the password for the registry that is found in /proc/cmdline.
-	registryPasswordCmdlineKey = "registry_password"
-	// registryCmdlineKey is the key for the registry that is found in /proc/cmdline.
-	registryCmdlineKey = "docker_registry"
-)
-
-var (
-	// cmdlinePath is the path to the /proc/cmdline file.
-	cmdlinePath = "/proc/cmdline"
-)
-
 type Config struct {
-	Log    *slog.Logger
-	Client *client.Client
+	Log          *slog.Logger
+	Client       *client.Client
+	RegistryAuth *registry.AuthConfig
 }
 
 func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 	pullImage := func() error {
-		// We need the image to be available before we can create a container.
-		// TODO(jacobweinstock): add auth
-		/*
-			var authStr string
-			if regAuth != nil {
-				encodedJSON, err := json.Marshal(regAuth)
-				if err != nil {
-					return fmt.Errorf("unable to encode auth config: %w", err)
-				}
-				authStr = base64.URLEncoding.EncodeToString(encodedJSON)
+		pullOpts := image.PullOptions{}
+
+		if c.RegistryAuth != nil {
+			encodedJSON, err := json.Marshal(c.RegistryAuth)
+			if err != nil {
+				return fmt.Errorf("unable to encode auth config: %w", err)
 			}
-		*/
-		img, err := c.Client.ImagePull(ctx, a.Image, image.PullOptions{})
+			pullOpts.RegistryAuth = base64.URLEncoding.EncodeToString(encodedJSON)
+		}
+
+		img, err := c.Client.ImagePull(ctx, a.Image, pullOpts)
 		if err != nil {
+			// If the image is already present, we can ignore the error.
+			// This might be the case where the image is already present in the local cache
+			// and the environment doesn't have access to the registry.
+			// Embedded images in HookOS are a partial example of this.
+			if _, _, err := c.Client.ImageInspectWithRaw(ctx, a.Image); err == nil {
+				return nil
+			}
 			return fmt.Errorf("docker: %w", err)
 		}
 		defer img.Close()
 
 		// Docker requires everything to be read from the images ReadCloser for the image to actually
-		// be pulled. We may want to log image pulls in a circular buffer somewhere for debugability.
+		// be pulled. We may want to log image pulls in a circular buffer somewhere for debug-ability.
 		if _, err = io.Copy(io.Discard, img); err != nil {
 			return fmt.Errorf("docker: %w", err)
 		}
@@ -79,20 +71,14 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 	}
 
 	hostCfg := container.HostConfig{
-		Mounts: []mount.Mount{},
+		Binds:      []string{},
+		Privileged: true,
 	}
 	if a.Namespaces.PID != "" {
 		hostCfg.PidMode = container.PidMode(a.Namespaces.PID)
 	}
 	for _, v := range a.Volumes {
-		parsed := strings.SplitN(string(v), ":", 3)
-		if len(parsed) < 2 {
-			continue
-		}
-		hostCfg.Mounts = append(hostCfg.Mounts, mount.Mount{
-			Source: parsed[0],
-			Target: parsed[1],
-		})
+		hostCfg.Binds = append(hostCfg.Binds, string(v))
 	}
 
 	containerName := conv.ParseName(a.ID, a.Name)
@@ -122,7 +108,10 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 
 		// We can't use the context passed to Run() as it may have been cancelled so we use Background()
 		// instead.
-		err := c.Client.ContainerRemove(context.Background(), create.ID, opts)
+		// give the context 10 seconds to remove the container
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err := c.Client.ContainerRemove(ctx, create.ID, opts)
 		if err != nil {
 			c.Log.Info("Couldn't remove container", "container_name", containerName, "error", err)
 		}
@@ -156,43 +145,4 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		}
 		return fmt.Errorf("context error: %w", ctx.Err())
 	}
-}
-
-func parseCmdline(cmdlinePath string) (map[string]string, error) {
-	cmdline, err := os.ReadFile(cmdlinePath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read /proc/cmdline: %w", err)
-	}
-
-	cmdlineMap := make(map[string]string)
-	for _, arg := range strings.Split(string(cmdline), " ") {
-		kv := strings.SplitN(arg, "=", 2)
-		if len(kv) == 0 {
-			continue
-		}
-		cmdlineMap[kv[0]] = kv[1]
-	}
-
-	return cmdlineMap, nil
-}
-
-// toRegAuth right now we only support username and password for a registry
-func toRegAuth(cmdline map[string]string) (*registry.AuthConfig, error) {
-	var found bool
-	authConfig := &registry.AuthConfig{}
-
-	authConfig.Username, found = cmdline[registryUsernameCmdlineKey]
-	if !found {
-		return nil, fmt.Errorf("unable to find %s in /proc/cmdline", registryUsernameCmdlineKey)
-	}
-	authConfig.Password, found = cmdline[registryPasswordCmdlineKey]
-	if !found {
-		return nil, fmt.Errorf("unable to find %s in /proc/cmdline", registryPasswordCmdlineKey)
-	}
-	authConfig.ServerAddress, found = cmdline[registryCmdlineKey]
-	if !found {
-		return nil, fmt.Errorf("unable to find %s in /proc/cmdline", registryCmdlineKey)
-	}
-
-	return authConfig, nil
 }

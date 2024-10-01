@@ -26,15 +26,16 @@ type Config struct {
 	Actions          chan spec.Action
 }
 
-func (c *Config) Start(ctx context.Context) error {
+func (c *Config) Start(ctx context.Context) {
 	c.Log.Info("grpc transport starting")
 	var inProcessAction *proto.WorkflowAction
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		default:
 		}
+
 		stream, err := c.TinkServerClient.GetWorkflowContexts(ctx, &proto.WorkflowContextRequest{WorkerId: c.WorkerID})
 		if err != nil {
 			<-time.After(c.RetryInterval)
@@ -42,11 +43,11 @@ func (c *Config) Start(ctx context.Context) error {
 		}
 
 		request, err := stream.Recv()
-		switch {
-		case err != nil:
+		if err != nil {
 			<-time.After(c.RetryInterval)
 			continue
 		}
+
 		if request == nil || request.GetCurrentWorker() != c.WorkerID || request.GetCurrentActionState() != proto.State_STATE_PENDING {
 			<-time.After(c.RetryInterval)
 			continue
@@ -69,13 +70,17 @@ func (c *Config) Start(ctx context.Context) error {
 			ID:             request.GetWorkflowId(),
 			Name:           curAction.Name,
 			Image:          curAction.Image,
-			Cmd:            curAction.Command[0],
-			Args:           curAction.Command[1:],
 			Env:            []spec.Env{},
 			Volumes:        []spec.Volume{},
 			Namespaces:     spec.Namespaces{},
 			Retries:        0,
 			TimeoutSeconds: int(curAction.Timeout),
+		}
+		if len(curAction.Command) > 0 {
+			action.Cmd = curAction.Command[0]
+			if len(curAction.Command) > 1 {
+				action.Args = curAction.Command[1:]
+			}
 		}
 		for _, v := range curAction.Volumes {
 			action.Volumes = append(action.Volumes, spec.Volume(v))

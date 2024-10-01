@@ -50,12 +50,18 @@ func (c *Config) Run(ctx context.Context, log *slog.Logger) {
 
 		action, err := c.TransportReader.Read(ctx)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
 			log.Info("error reading/retrieving action", "error", err)
 			continue
 		}
 
 		log.Info("received action", "action", action)
 		if err := c.TransportWriter.Write(ctx, spec.Event{Action: action, Message: "running action", State: spec.StateRunning}); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
 			log.Info("error writing event", "error", err)
 			continue
 		}
@@ -68,24 +74,29 @@ func (c *Config) Run(ctx context.Context, log *slog.Logger) {
 		}
 		dur := time.Duration(action.TimeoutSeconds) * time.Second
 
-		timeoutCtx, _ := context.WithTimeout(ctx, dur)
+		timeoutCtx, timeoutDone := context.WithTimeout(ctx, dur)
 		for i := 1; i <= retries; i++ {
 			if err := c.RuntimeExecutor.Execute(timeoutCtx, action); err != nil {
 				log.Info("error executing action", "error", err, "maxRetries", retries, "currentRetry", i)
 				state = spec.StateFailure
 				if errors.Is(err, context.DeadlineExceeded) {
 					state = spec.StateTimeout
+					timeoutDone()
 					break
 				}
 				if i == retries {
+					timeoutDone()
 					break
 				}
+				timeoutDone()
 				continue
 			}
 			state = spec.StateSuccess
 			log.Info("executed action", "action", action)
+			timeoutDone()
 			break
 		}
+		timeoutDone()
 
 		if err := c.TransportWriter.Write(ctx, spec.Event{Action: action, Message: "action completed", State: state}); err != nil {
 			log.Info("error writing event", "error", err)
