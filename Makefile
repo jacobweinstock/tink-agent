@@ -38,5 +38,14 @@ lint: $(GOLANGCI_LINT)
 binary: ## Build the binary.
 	CGO_ENABLED=0 go build -o $(NAME) .
 
+.PHONY: image
 image: ## Build the docker image.
 	docker build -t $(NAME) .
+
+.PHONY: test
+test: ## Run tests.
+	CGO_ENABLED=1 go test -race -coverprofile=coverage.txt -covermode=atomic -v ${TEST_ARGS} ./...
+
+.PHONY: coverage
+coverage: test ## Show test coverage
+	go tool cover -func=coverage.txt
