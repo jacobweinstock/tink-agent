@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/netip"
 
-	"github.com/jacobweinstock/rerun/spec"
+	"github.com/jacobweinstock/tink-agent/spec"
 	"github.com/nats-io/nats.go"
 	"gopkg.in/yaml.v3"
 )

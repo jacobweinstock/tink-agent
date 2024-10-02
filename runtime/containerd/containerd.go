@@ -12,8 +12,8 @@ import (
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/containers/image/v5/pkg/shortnames"
 	"github.com/containers/image/v5/types"
-	"github.com/jacobweinstock/rerun/pkg/conv"
-	"github.com/jacobweinstock/rerun/spec"
+	"github.com/jacobweinstock/tink-agent/pkg/conv"
+	"github.com/jacobweinstock/tink-agent/spec"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 

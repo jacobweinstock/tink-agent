@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jacobweinstock/rerun/spec"
+	"github.com/jacobweinstock/tink-agent/spec"
 )
 
 // TransportReader provides a method to read an action

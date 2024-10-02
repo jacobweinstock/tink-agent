@@ -1,4 +1,4 @@
-module github.com/jacobweinstock/rerun
+module github.com/jacobweinstock/tink-agent
 
 go 1.22.1
 

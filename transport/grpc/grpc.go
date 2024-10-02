@@ -9,8 +9,8 @@ import (
 
 	"crypto/tls"
 
-	"github.com/jacobweinstock/rerun/spec"
-	"github.com/jacobweinstock/rerun/transport/grpc/proto"
+	"github.com/jacobweinstock/tink-agent/spec"
+	"github.com/jacobweinstock/tink-agent/transport/grpc/proto"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"

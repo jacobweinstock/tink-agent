@@ -15,8 +15,8 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
-	"github.com/jacobweinstock/rerun/pkg/conv"
-	"github.com/jacobweinstock/rerun/spec"
+	"github.com/jacobweinstock/tink-agent/pkg/conv"
+	"github.com/jacobweinstock/tink-agent/spec"
 )
 
 type Config struct {

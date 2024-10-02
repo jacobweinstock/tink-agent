@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/jacobweinstock/rerun/pkg/rand"
-	"github.com/jacobweinstock/rerun/spec"
+	"github.com/jacobweinstock/tink-agent/pkg/rand"
+	"github.com/jacobweinstock/tink-agent/spec"
 )
 
 // ParseName converts an action ID into a usable container name.

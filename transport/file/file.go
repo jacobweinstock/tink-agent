@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/jacobweinstock/rerun/spec"
+	"github.com/jacobweinstock/tink-agent/spec"
 	"gopkg.in/yaml.v3"
 )
 

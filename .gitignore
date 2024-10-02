@@ -24,3 +24,6 @@ go.work.sum
 .vscode/
 
 tink-worker
+coverage.txt
+out/
+
