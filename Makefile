@@ -7,7 +7,7 @@ OUT_DIR ?= $(shell pwd)/out
 # Linter installation directory.
 TOOLS_DIR ?= $(OUT_DIR)/tools
 
-NAME ?= tink-worker
+NAME ?= tink-agent
 
 .PHONY: help
 help:
@@ -49,3 +49,4 @@ test: ## Run tests.
 .PHONY: coverage
 coverage: test ## Show test coverage
 	go tool cover -func=coverage.txt
+

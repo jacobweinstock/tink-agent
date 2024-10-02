@@ -23,7 +23,7 @@ go.work.sum
 
 .vscode/
 
-tink-worker
+tink-agent
 coverage.txt
 out/
 

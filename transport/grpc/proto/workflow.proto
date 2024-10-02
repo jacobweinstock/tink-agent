@@ -36,7 +36,7 @@ message WorkflowContextRequest {
   */
   STATE_PENDING = 0;
   /*
-   * A workflow is in a running state when the tink-worker started the
+   * A workflow is in a running state when the tink-agent started the
    * exeuction of it, and it is currently in execution inside the device
    * itself.
    */

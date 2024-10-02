@@ -33,7 +33,7 @@ const (
 	// A workflow is in pending state when it is waiting for the hardware to pick
 	// it up and start the execution.
 	State_STATE_PENDING State = 0
-	// A workflow is in a running state when the tink-worker started the
+	// A workflow is in a running state when the tink-agent started the
 	// exeuction of it, and it is currently in execution inside the device
 	// itself.
 	State_STATE_RUNNING State = 1
