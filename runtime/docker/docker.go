@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -93,7 +94,7 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		cfg.Cmd = append(cfg.Cmd, a.Args...)
 	}
 
-	// TODO: Figure out container logging. We probably want to save it somewhere for debugability.
+	// TODO: Figure out container logging. We probably want to save it somewhere for debug-ability.
 
 	create, err := c.Client.ContainerCreate(ctx, &cfg, &hostCfg, nil, nil, containerName)
 	if err != nil {
@@ -130,10 +131,20 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		if result.StatusCode == 0 {
 			return nil
 		}
-		return fmt.Errorf("got non 0 exit status, see the logs for more information")
+		err := fmt.Errorf("got non 0 exit status: %d", result.StatusCode)
+		logs, err := c.logs(ctx, create.ID)
+		if err != nil {
+			return errors.Join(err, fmt.Errorf("error getting logs: %w", err))
+		}
+		return errors.Join(err, fmt.Errorf("container logs: %s", logs))
 
 	case err := <-waitErr:
-		return fmt.Errorf("error while waiting for container: %w", err)
+		err = fmt.Errorf("error while waiting for container: %w", err)
+		logs, err := c.logs(ctx, create.ID)
+		if err != nil {
+			return errors.Join(err, fmt.Errorf("error getting logs: %w", err))
+		}
+		return errors.Join(err, fmt.Errorf("container logs: %s", logs))
 
 	case <-ctx.Done():
 		// We can't use the context passed to Run() as its been cancelled.
@@ -145,4 +156,22 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		}
 		return fmt.Errorf("context error: %w", ctx.Err())
 	}
+}
+
+func (c *Config) logs(ctx context.Context, id string) (string, error) {
+	reader, err := c.Client.ContainerLogs(ctx, id, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("error getting logs: %w", err)
+	}
+	defer reader.Close()
+
+	logs, err := io.ReadAll(reader)
+	if err != nil {
+		return "", fmt.Errorf("error reading logs: %w", err)
+	}
+
+	return string(logs), nil
 }
