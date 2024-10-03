@@ -46,9 +46,9 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
       - name: Login to ghcr.io
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -56,9 +56,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare buildx environment
-        if: github.event_name != 'pull_request'
         run: make prepare-buildx
 
       - name: Build and Push container images
-        if: github.event_name != 'pull_request'
         run: make build-push-image
