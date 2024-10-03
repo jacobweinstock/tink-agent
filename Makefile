@@ -7,7 +7,13 @@ OUT_DIR ?= $(shell pwd)/out
 # Linter installation directory.
 TOOLS_DIR ?= $(OUT_DIR)/tools
 
+GIT_COMMIT := $(shell git rev-parse --short HEAD)
+
 NAME ?= tink-agent
+
+CONTAINER_REPOSITORY := ghcr.io/jacobweinstock
+
+IMAGE_NAME := $(CONTAINER_REPOSITORY)/$(NAME)
 
 .PHONY: help
 help:
@@ -50,3 +56,15 @@ test: ## Run tests.
 coverage: test ## Show test coverage
 	go tool cover -func=coverage.txt
 
+.PHONY: prepare-buildx
+prepare-buildx: ## Prepare the buildx environment.
+## the "|| true" is to avoid failing if the builder already exists.
+	docker buildx create --name tinkerbell-multiarch --use --driver docker-container || true
+
+.PHONY: clean-buildx
+clean-buildx: ## Clean the buildx environment.
+	docker buildx rm tinkerbell-multiarch || true
+
+.PHONY: build-push-image
+build-push-image: ## Build and push the container image for both Amd64 and Arm64 architectures.
+	docker buildx build --platform linux/amd64,linux/arm64 --push -t $(IMAGE_NAME):$(GIT_COMMIT) -t $(IMAGE_NAME):latest .

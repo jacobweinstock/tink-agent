@@ -28,9 +28,9 @@ type TransportWriter interface {
 }
 
 type Config struct {
-	TransportReader
-	RuntimeExecutor
-	TransportWriter
+	TransportReader TransportReader
+	RuntimeExecutor RuntimeExecutor
+	TransportWriter TransportWriter
 }
 
 func (c *Config) Run(ctx context.Context, log *slog.Logger) {

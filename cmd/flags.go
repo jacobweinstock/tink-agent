@@ -14,6 +14,7 @@ func RegisterFlagsLegacy(c *Config, fs *flag.FlagSet) {
 	fs.StringVar(&c.Transport.GRPC.ServerAddrPort, "tinkerbell-grpc-authority", "", "Tink server GRPC IP:Port")
 	fs.BoolVar(&c.Transport.GRPC.TLSInsecure, "tinkerbell-insecure-tls", false, "Tink server GRPC insecure TLS")
 	fs.BoolVar(&c.Transport.GRPC.TLSEnabled, "tinkerbell-tls", true, "Tink server GRPC use TLS")
+	fs.StringVar(&c.LogLevel, "log-level", "info", "Log level")
 }
 
 func RegisterRootFlags(c *Config, fs *flag.FlagSet) {

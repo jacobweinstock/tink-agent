@@ -2,7 +2,9 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"time"
@@ -26,24 +28,27 @@ type Config struct {
 	Actions          chan spec.Action
 }
 
-func (c *Config) Start(ctx context.Context) {
+func (c *Config) Start(ctx context.Context) error {
 	c.Log.Info("grpc transport starting")
 	var inProcessAction *proto.WorkflowAction
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 		}
 
 		stream, err := c.TinkServerClient.GetWorkflowContexts(ctx, &proto.WorkflowContextRequest{WorkerId: c.WorkerID})
 		if err != nil {
+			// TODO(jacobweinstock): handle unrecoverable errors
+			c.Log.Debug("error getting workflow contexts", "error", err)
 			<-time.After(c.RetryInterval)
 			continue
 		}
 
 		request, err := stream.Recv()
-		if err != nil {
+		if err != nil && !errors.Is(err, io.EOF) {
+			c.Log.Debug("error receiving workflow context", "error", err)
 			<-time.After(c.RetryInterval)
 			continue
 		}
@@ -55,6 +60,7 @@ func (c *Config) Start(ctx context.Context) {
 
 		actions, err := c.TinkServerClient.GetWorkflowActions(ctx, &proto.WorkflowActionsRequest{WorkflowId: request.GetWorkflowId()})
 		if err != nil {
+			c.Log.Debug("error getting workflow actions", "error", err)
 			<-time.After(c.RetryInterval)
 			continue
 		}
@@ -128,6 +134,9 @@ func (c *Config) Write(ctx context.Context, event spec.Event) error {
 }
 
 func NewClientConn(authority string, tlsEnabled bool, tlsInsecure bool) (*grpc.ClientConn, error) {
+	if authority == "" {
+		return nil, fmt.Errorf("authority (IP:Port) is required")
+	}
 	var creds grpc.DialOption
 	if tlsEnabled { // #nosec G402
 		creds = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: tlsInsecure}))

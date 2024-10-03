@@ -51,7 +51,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false}))
+	// TODO(jacobweinstock): do input validation. required fields, etc.
+	// ID is required
+	// tink server address is required
+
+	l := slog.LevelInfo
+	if c.LogLevel == "debug" {
+		l = slog.LevelDebug
+	}
+
+	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false, Level: l}))
 
 	eg, ectx := errgroup.WithContext(ctx)
 	ctx = ectx
@@ -87,8 +96,7 @@ func main() {
 			Actions:          make(chan spec.Action),
 		}
 		eg.Go(func() error {
-			readWriter.Start(ctx)
-			return nil
+			return readWriter.Start(ctx)
 		})
 		tr = readWriter
 		tw = readWriter

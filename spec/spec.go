@@ -2,7 +2,7 @@ package spec
 
 import "fmt"
 
-// Action defines an individual action to be run on a target machine.
+// Action holds the configuration used to create and run an Action container.
 type Action struct {
 	TaskName string
 	ID       string `json:"id" yaml:"id"`
@@ -23,7 +23,7 @@ type Action struct {
 	// +optional
 	Args []string `json:"args,omitempty" yaml:"args,omitempty"`
 
-	// Env defines environment variables used when launching the container.
+	// Env defines environment variables that will be available inside an Action container.
 	//+optional
 	Env []Env `json:"env,omitempty" yaml:"env,omitempty"`
 
@@ -43,9 +43,10 @@ type Env struct {
 	Value string `json:"value" yaml:"value"`
 }
 
-// Volume is a specification for mounting a volume in an action. Volumes take the form
-// {SRC-VOLUME-NAME | SRC-HOST-DIR}:TGT-CONTAINER-DIR:OPTIONS. When specifying a VOLUME-NAME that
-// does not exist it will be created for you. Examples:
+// Volume is a specification for mounting a location on a Host into an Action container.
+// Volumes take the form {SRC-VOLUME-NAME | SRC-HOST-DIR}:TGT-CONTAINER-DIR:OPTIONS.
+// When specifying a VOLUME-NAME that does not exist it will be created for you.
+// Examples:
 //
 // Read-only bind mount bound to /data
 //
