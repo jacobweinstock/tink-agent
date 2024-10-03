@@ -131,20 +131,20 @@ func (c *Config) Execute(ctx context.Context, a spec.Action) error {
 		if result.StatusCode == 0 {
 			return nil
 		}
-		err := fmt.Errorf("got non 0 exit status: %d", result.StatusCode)
+		rerr := fmt.Errorf("got non 0 exit status: %d", result.StatusCode)
 		logs, err := c.logs(ctx, create.ID)
 		if err != nil {
-			return errors.Join(err, fmt.Errorf("error getting logs: %w", err))
+			return errors.Join(rerr, fmt.Errorf("error getting logs: %w", err))
 		}
-		return errors.Join(err, fmt.Errorf("container logs: %s", logs))
+		return errors.Join(rerr, fmt.Errorf("container logs: %s", logs))
 
 	case err := <-waitErr:
-		err = fmt.Errorf("error while waiting for container: %w", err)
+		rerr := fmt.Errorf("error while waiting for container: %w", err)
 		logs, err := c.logs(ctx, create.ID)
 		if err != nil {
-			return errors.Join(err, fmt.Errorf("error getting logs: %w", err))
+			return errors.Join(rerr, fmt.Errorf("error getting logs: %w", err))
 		}
-		return errors.Join(err, fmt.Errorf("container logs: %s", logs))
+		return errors.Join(rerr, fmt.Errorf("container logs: %s", logs))
 
 	case <-ctx.Done():
 		// We can't use the context passed to Run() as its been cancelled.
